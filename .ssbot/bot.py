@@ -1,5 +1,5 @@
 # /root/bot.py
-# ---
+# ---code by Jubair bro ---
 
 import logging
 import subprocess
