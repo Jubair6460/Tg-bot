@@ -1,5 +1,5 @@
-# /root/.ssbot/bot.py
-# ---bot for sensei Tunnel 
+# /root/bot.py
+# ---
 
 import logging
 import subprocess
@@ -7,6 +7,7 @@ import json
 import os
 import re
 from itertools import count
+from datetime import datetime
 
 # Third-party libraries
 import psutil
@@ -25,12 +26,10 @@ from telegram.error import BadRequest
 # --- Configuration ---
 BOT_TOKEN = "bot_token"
 ADMIN_FILE = "admins.txt"
-OWNER_ID = 5487394544
+OWNER_ID = 5487394544  # আপনার Owner ID দিন
+SERVICE_NAME = "sensi-bot"  # systemd সার্ভিস ফাইলের নাম
 BOT_FOOTER = "\n© 𝗕𝗼𝘁 𝗯𝘆 : @JubairFF"
-
-# --- Channel Join Configuration (for non-authorized users) ---
-JOIN_CHANNEL_URL = "https://t.me/+1p9RnexGMP0yOGVl"  # আপনার চ্যানেলের লিঙ্ক দিন
-JOIN_CHANNEL_NAME = "Telegram Channel"          # আপনার চ্যানেলের নাম দিন
+BOT_START_TIME = datetime.now()
 
 # --- Setup Logging ---
 logging.basicConfig(
@@ -45,25 +44,34 @@ GET_ADMIN_ID_ADD, SELECT_ADMIN_TO_REMOVE = [next(states) for _ in range(2)]
 SELECT_PROTOCOL_DELETE, SELECT_USER_DELETE, CONFIRM_DELETE = [next(states) for _ in range(3)]
 SELECT_PROTOCOL_RENEW, SELECT_USER_RENEW, GET_NEW_DURATION_RENEW, GET_NEW_IP_LIMIT_RENEW = [next(states) for _ in range(4)]
 
-# --- Font Styling ---
-# Note: Font styling is now done directly in the message strings for better control.
-# This function can be used if a complex mapping is needed again.
-def style_text(text):
-    """
-    This function is kept for potential future use but is currently not
-    the primary method for styling to allow for better line wrapping.
-    """
-    # Example of a mapping if needed later
-    font_mapping = {
-         'Username': '𝗨𝘀𝗲𝗿𝗻𝗮𝗺𝗲',
-         'Password': '𝗣𝗮𝘀𝘀𝘄𝗼𝗿𝗱',
-    }
-    for original, styled in font_mapping.items():
-        text = text.replace(original, styled)
-    return text
-
-
 # --- Helper Functions ---
+
+def read_file_content(path, default="N/A"):
+    """Safely reads content from a file."""
+    if os.path.exists(path):
+        try:
+            with open(path, 'r') as f:
+                return f.read().strip()
+        except Exception as e:
+            logger.error(f"Could not read file {path}: {e}")
+    return default
+
+def create_progress_bar(percentage, length=10):
+    """Creates a text-based progress bar."""
+    filled_length = int(length * percentage // 100)
+    bar = '▣' * filled_length + '▢' * (length - filled_length)
+    return f"[{bar}]"
+
+def format_uptime(seconds):
+    """Formats seconds into a human-readable uptime string."""
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    uptime = ""
+    if days > 0: uptime += f"{int(days)}d "
+    if hours > 0: uptime += f"{int(hours)}h "
+    if minutes > 0: uptime += f"{int(minutes)}m"
+    return uptime.strip() or "Just now"
 
 def load_admins():
     if not os.path.exists(ADMIN_FILE):
@@ -213,6 +221,7 @@ async def send_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [InlineKeyboardButton("➕ 𝗖𝗿𝗲𝗮𝘁𝗲 𝗔𝗰𝗰𝗼𝘂𝗻𝘁", callback_data="create_account_start")],
+        [InlineKeyboardButton("⚡️ 𝗚𝗲𝘁 𝗧𝗿𝗶𝗮𝗹", callback_data="trial_menu")],
         [InlineKeyboardButton("👥 𝗠𝗮𝗻𝗮𝗴𝗲 𝗨𝘀𝗲𝗿𝘀", callback_data="manage_users_menu")],
         [InlineKeyboardButton("ℹ️ 𝗛𝗲𝗹𝗽", callback_data="help")],
     ]
@@ -223,7 +232,6 @@ async def send_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     if update.callback_query:
-        # FIX: Wrap message deletion in a try-except block to prevent crashes.
         try:
             await update.callback_query.message.delete()
         except BadRequest as e:
@@ -254,9 +262,7 @@ def create_cancel_menu():
 # --- Command & Fallback Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not is_admin(update):
-        keyboard = [[InlineKeyboardButton(f"📢 Join {JOIN_CHANNEL_NAME}", url=JOIN_CHANNEL_URL)]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗯𝗼𝘁.", reply_markup=reply_markup)
+        await update.message.reply_text("⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗯𝗼𝘁.")
         return
     
     await send_main_menu(update, context)
@@ -270,12 +276,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 │ 𝘆𝗼𝘂𝗿 𝗩𝗣𝗡 𝘀𝗲𝗿𝘃𝗶𝗰𝗲.
 │
 │ 𝗞𝗲𝘆 𝗙𝗲𝗮𝘁𝘂𝗿𝗲𝘀:
-│ • 𝗖𝗿𝗲𝗮𝘁𝗲 𝗻𝗲𝘄 𝘂𝘀𝗲𝗿 𝗮𝗰𝗰𝗼𝘂𝗻𝘁𝘀.
-│ • 𝗟𝗶𝘀𝘁, 𝗗𝗲𝗹𝗲𝘁𝗲 & 𝗥𝗲𝗻𝗲𝘄 𝘂𝘀𝗲𝗿𝘀.
+│ • 𝗖𝗿𝗲𝗮𝘁𝗲 & 𝗺𝗮𝗻𝗮𝗴𝗲 𝘂𝘀𝗲𝗿𝘀.
+│ • 𝗚𝗲𝗻𝗲𝗿𝗮𝘁𝗲 𝘁𝗿𝗶𝗮𝗹 𝗮𝗰𝗰𝗼𝘂𝗻𝘁𝘀.
+│ • 𝗖𝗵𝗲𝗰𝗸 𝘀𝗲𝗿𝘃𝗲𝗿 𝘀𝘁𝗮𝘁𝘂𝘀.
 │
-│ 𝗜𝗺𝗽𝗼𝗿𝘁𝗮𝗻𝘁:
-│ 𝗨𝘀𝗲 /cancel 𝘁𝗼 𝗲𝘅𝗶𝘁 𝗳𝗿𝗼𝗺
-│ 𝗮𝗻𝘆 𝗼𝗻𝗴𝗼𝗶𝗻𝗴 𝗼𝗽𝗲𝗿𝗮𝘁𝗶𝗼𝗻.
+│ 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
+│ • /start - 𝗦𝗵𝗼𝘄 𝗺𝗮𝗶𝗻 𝗺𝗲𝗻𝘂.
+│ • /restart - 𝗥𝗲𝘀𝘁𝗮𝗿𝘁 𝗯𝗼𝘁.
+│ • /cancel - 𝗘𝘅𝗶𝘁 𝗮𝗻𝘆 𝗼𝗽𝗲𝗿𝗮𝘁𝗶𝗼𝗻.
 │
 │ 𝗙𝗼𝗿 𝗮𝗻𝘆 𝗽𝗿𝗼𝗯𝗹𝗲𝗺 𝗼𝗿 𝗲𝗿𝗿𝗼𝗿,
 │ 𝗰𝗼𝗻𝘁𝗮𝗰𝘁 𝗮𝗱𝗺𝗶𝗻: @Jubairbro_bot
@@ -307,12 +315,12 @@ async def restart_bot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗰𝗼𝗺𝗺𝗮𝗻𝗱.")
         return
     
-    await update.message.reply_text("🔄 𝗥𝗲𝘀𝘁𝗮𝗿𝘁𝗶𝗻𝗴 𝗯𝗼𝘁 𝘀𝗲𝗿𝘃𝗶𝗰𝗲..." + BOT_FOOTER)
+    await update.message.reply_text(f"🔄 𝗥𝗲𝘀𝘁𝗮𝗿𝘁𝗶𝗻𝗴 `{SERVICE_NAME}`..." + BOT_FOOTER, parse_mode='Markdown')
     try:
-        subprocess.run(['sudo', 'systemctl', 'restart', 'bot.service'], check=True)
-        await update.message.reply_text("✅ 𝗕𝗼𝘁 𝘀𝗲𝗿𝘃𝗶𝗰𝗲 𝗿𝗲𝘀𝘁𝗮𝗿𝘁𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆!" + BOT_FOOTER)
+        subprocess.run(['sudo', 'systemctl', 'restart', SERVICE_NAME], check=True)
+        await update.message.reply_text(f"✅ `{SERVICE_NAME}` 𝗿𝗲𝘀𝘁𝗮𝗿𝘁𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆!" + BOT_FOOTER, parse_mode='Markdown')
     except subprocess.CalledProcessError as e:
-        await update.message.reply_text(f"❌ 𝗙𝗮𝗶𝗹𝗲𝗱 𝘁𝗼 𝗿𝗲𝘀𝘁𝗮𝗿𝘁 𝗯𝗼𝘁 𝘀𝗲𝗿𝘃𝗶𝗰𝗲: {e}" + BOT_FOOTER)
+        await update.message.reply_text(f"❌ 𝗙𝗮𝗶𝗹𝗲𝗱 𝘁𝗼 𝗿𝗲𝘀𝘁𝗮𝗿𝘁 `{SERVICE_NAME}`: {e}" + BOT_FOOTER, parse_mode='Markdown')
     except Exception as e:
         await update.message.reply_text(f"❌ 𝗘𝗿𝗿𝗼𝗿: {e}" + BOT_FOOTER)
 
@@ -339,7 +347,6 @@ async def select_type_create(update: Update, context: ContextTypes.DEFAULT_TYPE)
 ╰─────────────────────╯"""
     
     await query.message.delete()
-    # FIX: Changed from reply_text to chat.send_message to avoid replying to a deleted message.
     prompt_message = await query.message.chat.send_message(text, reply_markup=create_cancel_menu(), parse_mode='Markdown')
     context.user_data['prompt_message_id'] = prompt_message.message_id
     return GET_USERNAME_CREATE
@@ -440,7 +447,7 @@ async def get_quota_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     context.user_data['quota'] = quota
     ud = context.user_data
     
-    summary = f"│ 𝗨𝘀𝗲𝗿𝗻𝗮𝗺𝗲: `{ud['username']}`\n│ 𝗗𝘂𝗿𝗮𝘁𝗶𝗼𝗻: `{ud['duration']}` 𝗱𝗮𝘆𝘀\n│ 𝗤𝘂𝗼𝘁𝗮: `{ud['quota']}` 𝗚𝗕"
+    summary = f"│ 𝗨𝘀𝗲𝗿𝗻𝗮𝗺𝗲: `{ud['username']}`\n│ 𝗗𝘂𝗿𝗮𝘁𝗶𝗼𝗻: `{ud['duration']}` 𝗱𝗮𝘆𝘀\n│ 𝗾𝘂𝗼𝘁𝗮: `{ud['quota']}` 𝗚𝗕"
 
     text = f"""╭─────────────────────╮
 │ 𝗘𝗻𝘁𝗲𝗿 𝗗𝗲𝘁𝗮𝗶𝗹𝘀 >          │
@@ -490,6 +497,58 @@ async def get_ip_limit_and_create(update: Update, context: ContextTypes.DEFAULT_
     
     context.user_data.clear()
     return ConversationHandler.END
+
+# --- Trial Account ---
+async def trial_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = """╭─────────────────────╮
+│ 𝗚𝗲𝘁 𝗧𝗿𝗶𝗮𝗹 𝗔𝗰𝗰𝗼𝘂𝗻𝘁 >     │
+╭─────────────────────╯
+│ 𝗦𝗲𝗹𝗲𝗰𝘁 𝘁𝗵𝗲 𝘁𝘆𝗽𝗲 𝗼𝗳 𝘁𝗿𝗶𝗮𝗹
+│ 𝗮𝗰𝗰𝗼𝘂𝗻𝘁 𝘆𝗼𝘂 𝘄𝗮𝗻𝘁.
+│
+│ 𝗡𝗼𝘁𝗲: 𝗧𝗿𝗶𝗮𝗹𝘀 𝗮𝗿𝗲 𝘃𝗮𝗹𝗶𝗱 𝗳𝗼𝗿
+│ 𝟭 𝗱𝗮𝘆 𝘄𝗶𝘁𝗵 𝗮 𝟭𝗚𝗕 𝗹𝗶𝗺𝗶𝘁.
+╰─────────────────────╯"""
+    await update.callback_query.edit_message_text(text, reply_markup=create_protocol_menu("trial_create", "back_to_main"), parse_mode='Markdown')
+
+async def create_trial_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    account_type = query.data.split('_')[2]
+    user_id = update.effective_user.id
+    
+    await query.edit_message_text(f"⏳ 𝗖𝗿𝗲𝗮𝘁𝗶𝗻𝗴 {account_type.capitalize()} 𝘁𝗿𝗶𝗮𝗹, 𝗽𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁...", parse_mode='Markdown')
+    
+    username = f"trial-{user_id}-{int(datetime.now().timestamp() % 10000)}"
+    duration = "1"  # 1 day
+    quota = "1"     # 1 GB (Script requires an integer value)
+    ip_limit = "1"
+    password = "123" # Dummy password for SSH trial
+
+    command = ['/usr/bin/apicreate', account_type, username]
+    if account_type == 'ssh':
+        command.extend([password, duration, ip_limit])
+    else:
+        command.extend([duration, quota, ip_limit])
+        
+    data, error = run_script(command)
+
+    if error or (data and data.get('status') != 'success'):
+        message_text = f"❌ 𝗙𝗮𝗶𝗹𝗲𝗱 𝘁𝗼 𝗰𝗿𝗲𝗮𝘁𝗲 𝘁𝗿𝗶𝗮𝗹 𝗮𝗰𝗰𝗼𝘂𝗻𝘁.\n𝗥𝗲𝗮𝘀𝗼𝗻: {error or data.get('message', 'Unknown error')}"
+        await query.edit_message_text(message_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=create_back_button_menu("back_to_main"))
+    else:
+        if account_type == 'ssh':
+            if 'data' in data and data['data']:
+                data['data']['password'] = password
+            message_text = format_ssh_output(data)
+        else:
+            message_text = format_v2ray_output(data, account_type)
+        await query.message.delete()
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=message_text + BOT_FOOTER, 
+            parse_mode='Markdown', 
+            reply_markup=create_back_button_menu("back_to_main")
+        )
 
 # --- User Management Menu & Functions ---
 async def manage_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -656,7 +715,6 @@ async def renew_user_get_duration(update: Update, context: ContextTypes.DEFAULT_
 ╰─────────────────────╯"""
 
     await query.message.delete()
-    # FIX: Changed from reply_text to chat.send_message
     prompt_message = await query.message.chat.send_message(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
     context.user_data['prompt_message_id'] = prompt_message.message_id
     return GET_NEW_DURATION_RENEW
@@ -739,21 +797,54 @@ async def server_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def server_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("𝗙𝗲𝘁𝗰𝗵𝗶𝗻𝗴 𝘀𝗲𝗿𝘃𝗲𝗿 𝘀𝘁𝗮𝘁𝘀...")
-    cpu = psutil.cpu_percent(interval=1)
+    await query.answer("Fetching detailed server stats...")
+
+    os_info_raw = read_file_content("/etc/os-release")
+    os_info = "Linux"
+    if 'PRETTY_NAME="' in os_info_raw:
+        os_info = os_info_raw.split('PRETTY_NAME="')[1].split('"')[0]
+
+    domain = read_file_content("/etc/xray/domain")
+    city = read_file_content("/etc/xray/city")
+    isp = read_file_content("/etc/xray/isp")
+    ns_host = read_file_content("/etc/xray/dns")
+    ip_address = subprocess.getoutput("hostname -I | awk '{print $1}'")
+    
+    cpu_percent = psutil.cpu_percent(interval=1)
+    cpu_cores = psutil.cpu_count(logical=True)
     ram = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
     
-    body = f"""│ • 𝗖𝗣𝗨 : {cpu}%
-│ • 𝗥𝗔𝗠 : {ram.percent}% ({ram.used/10**9:.2f} 𝗚𝗕)
-│ • 𝗗𝗶𝘀𝗸: {disk.percent}% ({disk.used/10**9:.2f} 𝗚𝗕)"""
+    system_uptime_seconds = datetime.now().timestamp() - psutil.boot_time()
+    bot_uptime_seconds = (datetime.now() - BOT_START_TIME).total_seconds()
 
-    stats = f"""╭─────────────────────╮
-│ 𝗦𝗲𝗿𝘃𝗲𝗿 𝗦𝘁𝗮𝘁𝘀 >           │
-╭─────────────────────╯
-{body}
+    stats_text = f"""
+╭─**Server & System Info**
+│ 𝗦𝘆𝘀𝘁𝗲𝗺: `{os_info}`
+│ 𝗗𝗼𝗺𝗮𝗶𝗻: `{domain}`
+│ 𝗜𝗣: `{ip_address}`
+│ 𝗖𝗶𝘁𝘆: `{city}`
+│ 𝗜𝗦𝗣: `{isp}`
+│ 𝗡𝗦: `{ns_host}`
+╰─────────────────────╯
+╭─**Performance**
+│ 𝗖𝗣𝗨: {create_progress_bar(cpu_percent)} {cpu_percent}%
+│        `({cpu_cores} Cores)`
+│ 𝗥𝗔𝗠: {create_progress_bar(ram.percent)} {ram.percent}%
+│        `({ram.used/10**9:.2f} GB / {ram.total/10**9:.2f} GB)`
+│ 𝗗𝗶𝘀𝗸: {create_progress_bar(disk.percent)} {disk.percent}%
+│        `({disk.used/10**9:.2f} GB / {disk.total/10**9:.2f} GB)`
+╰─────────────────────╯
+╭─**Uptime**
+│ 𝗦𝘆𝘀𝘁𝗲𝗺: `{format_uptime(system_uptime_seconds)}`
+│ 𝗕𝗼𝘁: `{format_uptime(bot_uptime_seconds)}`
 ╰─────────────────────╯"""
-    await query.edit_message_text(stats + BOT_FOOTER, parse_mode='Markdown', reply_markup=create_back_button_menu("server_menu"))
+
+    await query.edit_message_text(
+        stats_text + BOT_FOOTER,
+        parse_mode='Markdown',
+        reply_markup=create_back_button_menu("server_menu")
+    )
 
 async def server_speedtest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -821,7 +912,6 @@ async def admin_add_start(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 │ 𝗜𝗗 𝗼𝗳 𝘁𝗵𝗲 𝗻𝗲𝘄 𝗮𝗱𝗺𝗶𝗻.
 ╰─────────────────────╯"""
     await query.message.delete()
-    # FIX: Changed from reply_text to chat.send_message
     prompt_message = await query.message.chat.send_message(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
     context.user_data['prompt_message_id'] = prompt_message.message_id
     return GET_ADMIN_ID_ADD
@@ -879,6 +969,10 @@ async def button_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_main_menu(update, context)
     elif route == "help": 
         await help_command(update, context)
+    elif route == "trial_menu":
+        await trial_menu(update, context)
+    elif route.startswith("trial_create_"):
+        await create_trial_account(update, context)
     elif route == "manage_users_menu": 
         await manage_users_menu(update, context)
     elif route == "server_menu": 
@@ -954,7 +1048,7 @@ def main() -> None:
     }
 
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("restart", restart_bot))  # Added restart command
+    application.add_handler(CommandHandler("restart", restart_bot))
     for handler in conv_handlers.values():
         application.add_handler(handler)
     application.add_handler(CallbackQueryHandler(button_router))
