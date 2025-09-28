@@ -1,11 +1,13 @@
 # /root/bot.py
-# ---code by Jubair bro ---
+# ---[Jubair bro}---
 
 import logging
 import subprocess
 import json
 import os
 import re
+import random
+import string
 from itertools import count
 from datetime import datetime
 
@@ -24,11 +26,11 @@ from telegram.ext import (
 from telegram.error import BadRequest
 
 # --- Configuration ---
-BOT_TOKEN = "bot_token"
+BOT_TOKEN = "bot_token" # আপনার বট টোকেন দিন
 ADMIN_FILE = "admins.txt"
 OWNER_ID = 5487394544  # আপনার Owner ID দিন
 SERVICE_NAME = "sensi-bot"  # systemd সার্ভিস ফাইলের নাম
-BOT_FOOTER = "\n© 𝗕𝗼𝘁 𝗯𝘆 : @JubairFF"
+BOT_FOOTER = "\n© 𝐁𝐨𝐭 𝐟𝐫𝐨𝐦 : @JubairFF"
 BOT_START_TIME = datetime.now()
 
 # --- Setup Logging ---
@@ -284,13 +286,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 │ • /start - 𝗦𝗵𝗼𝘄 𝗺𝗮𝗶𝗻 𝗺𝗲𝗻𝘂.
 │ • /restart - 𝗥𝗲𝘀𝘁𝗮𝗿𝘁 𝗯𝗼𝘁.
 │ • /cancel - 𝗘𝘅𝗶𝘁 𝗮𝗻𝘆 𝗼𝗽𝗲𝗿𝗮𝘁𝗶𝗼𝗻.
+│ • /help - 𝗕𝗼𝘁 𝗛𝗲𝗹𝗽 𝗠𝗲𝗻𝘂
 │
 │ 𝗙𝗼𝗿 𝗮𝗻𝘆 𝗽𝗿𝗼𝗯𝗹𝗲𝗺 𝗼𝗿 𝗲𝗿𝗿𝗼𝗿,
-│ 𝗰𝗼𝗻𝘁𝗮𝗰𝘁 𝗮𝗱𝗺𝗶𝗻: @Jubairbro_bot
+│ 𝗰𝗼𝗻𝘁𝗮𝗰𝘁 𝗮𝗱𝗺𝗶𝗻: @Jubairbro\_bot
 ╰─────────────────────╯"""
     
     keyboard = [[InlineKeyboardButton("« Back to Main Menu", callback_data="back_to_main")]]
-    await update.callback_query.edit_message_text(help_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(help_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(help_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=reply_markup)
 
 async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancels the current operation and returns to the main menu."""
@@ -315,14 +323,11 @@ async def restart_bot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗰𝗼𝗺𝗺𝗮𝗻𝗱.")
         return
     
-    await update.message.reply_text(f"🔄 𝗥𝗲𝘀𝘁𝗮𝗿𝘁𝗶𝗻𝗴 `{SERVICE_NAME}`..." + BOT_FOOTER, parse_mode='Markdown')
+    await update.message.reply_text(f" 𝐁𝐨𝐭 𝐑𝐞𝐬𝐭𝐚𝐫𝐭 𝐒𝐮𝐜𝐜𝐞𝐬𝐟𝐮𝐥 ✅" + BOT_FOOTER, parse_mode='Markdown')
     try:
-        subprocess.run(['sudo', 'systemctl', 'restart', SERVICE_NAME], check=True)
-        await update.message.reply_text(f"✅ `{SERVICE_NAME}` 𝗿𝗲𝘀𝘁𝗮𝗿𝘁𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆!" + BOT_FOOTER, parse_mode='Markdown')
-    except subprocess.CalledProcessError as e:
-        await update.message.reply_text(f"❌ 𝗙𝗮𝗶𝗹𝗲𝗱 𝘁𝗼 𝗿𝗲𝘀𝘁𝗮𝗿𝘁 `{SERVICE_NAME}`: {e}" + BOT_FOOTER, parse_mode='Markdown')
+        subprocess.Popen(['sudo', 'systemctl', 'restart', SERVICE_NAME])
     except Exception as e:
-        await update.message.reply_text(f"❌ 𝗘𝗿𝗿𝗼𝗿: {e}" + BOT_FOOTER)
+        await update.message.reply_text(f"❌ 𝗙𝗮𝗶𝗹𝗲𝗱 𝘁𝗼 𝗶𝘀𝘀𝘂𝗲 𝗿𝗲𝘀𝘁𝗮𝗿𝘁 𝗰𝗼𝗺𝗺𝗮𝗻𝗱: {e}" + BOT_FOOTER)
 
 # --- Account Creation Conversation ---
 async def create_account_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -514,15 +519,16 @@ async def trial_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def create_trial_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     account_type = query.data.split('_')[2]
-    user_id = update.effective_user.id
     
     await query.edit_message_text(f"⏳ 𝗖𝗿𝗲𝗮𝘁𝗶𝗻𝗴 {account_type.capitalize()} 𝘁𝗿𝗶𝗮𝗹, 𝗽𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁...", parse_mode='Markdown')
     
-    username = f"trial-{user_id}-{int(datetime.now().timestamp() % 10000)}"
-    duration = "1"  # 1 day
-    quota = "1"     # 1 GB (Script requires an integer value)
+    random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
+    username = f"trial-{random_suffix}"
+    
+    duration = "1"
+    quota = "1"
     ip_limit = "1"
-    password = "123" # Dummy password for SSH trial
+    password = "123"
 
     command = ['/usr/bin/apicreate', account_type, username]
     if account_type == 'ssh':
@@ -550,7 +556,8 @@ async def create_trial_account(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=create_back_button_menu("back_to_main")
         )
 
-# --- User Management Menu & Functions ---
+# --- User Management, Server, Admin sections ---
+
 async def manage_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     text = """╭─────────────────────╮
@@ -994,9 +1001,31 @@ async def button_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif route == "admin_list": 
         await admin_list(update, context)
 
+# --- Startup Notification ---
+async def send_startup_notification(application: Application):
+    """Sends a notification to all admins when the bot starts."""
+    admins = load_admins()
+    message = f"✅ **Bot Started/Restarted Successfully!**\n\nBot is now online." + BOT_FOOTER
+    for admin_id in admins:
+        try:
+            await application.bot.send_message(
+                chat_id=admin_id,
+                text=message,
+                parse_mode='Markdown'
+            )
+            logger.info(f"Sent startup notification to admin {admin_id}")
+        except Exception as e:
+            logger.warning(f"Failed to send startup notification to {admin_id}: {e}")
+
 # --- Main Function ---
 def main() -> None:
-    application = Application.builder().token(BOT_TOKEN).build()
+    """Start the bot."""
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .post_init(send_startup_notification)
+        .build()
+    )
     
     universal_fallbacks = [
         CommandHandler('cancel', cancel_conversation),
@@ -1049,10 +1078,14 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("restart", restart_bot))
+    application.add_handler(CommandHandler("help", help_command))
+    
     for handler in conv_handlers.values():
         application.add_handler(handler)
+        
     application.add_handler(CallbackQueryHandler(button_router))
-
+    
+    logger.info("Bot is starting polling...")
     application.run_polling()
 
 if __name__ == "__main__":
