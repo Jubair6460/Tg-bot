@@ -89,7 +89,21 @@ def save_admins(admins):
         for admin_id in admins: f.write(str(admin_id) + "\n")
 
 def is_admin(update: Update) -> bool:
+    """Checks if the user is a registered admin."""
     return update.effective_user.id in load_admins()
+
+def is_owner(update: Update) -> bool:
+    """Checks if the user is the bot owner."""
+    return update.effective_user.id == OWNER_ID
+
+async def send_unauthorized_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sends a standard 'not authorized' message and cleans up."""
+    text = "⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗯𝗼𝘁." + BOT_FOOTER
+    if update.callback_query:
+        # Answer the query to remove the "loading" state, and show an alert.
+        await update.callback_query.answer(text, show_alert=True)
+    elif update.message:
+        await update.message.reply_text(text)
 
 def run_script(command):
     logger.info(f"Executing command: {' '.join(command)}")
@@ -196,13 +210,17 @@ async def get_users_for_protocol(protocol):
 
 async def delete_previous_messages(context: ContextTypes.DEFAULT_TYPE, update: Update):
     """Deletes the bot's last prompt and the user's reply."""
+    if not update.message: return # Ensure there's a message to delete
+    
     chat_id = update.effective_chat.id
     user_message_id = update.message.message_id
     prompt_message_id = context.user_data.pop('prompt_message_id', None)
     
     try:
+        # Delete the bot's message first
         if prompt_message_id:
             await context.bot.delete_message(chat_id=chat_id, message_id=prompt_message_id)
+        # Then delete the user's message
         if user_message_id:
             await context.bot.delete_message(chat_id=chat_id, message_id=user_message_id)
     except Exception as e:
@@ -229,6 +247,7 @@ async def send_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     if is_admin(update):
         keyboard.append([InlineKeyboardButton("🖥️ 𝗦𝗲𝗿𝘃𝗲𝗿", callback_data="server_menu")])
+    if is_owner(update): # Only owner can see the Admin management button
         keyboard.append([InlineKeyboardButton("🔒 𝗔𝗱𝗺𝗶𝗻", callback_data="admin_menu")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -240,7 +259,7 @@ async def send_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if "Message to delete not found" not in str(e):
                 logger.warning(f"Error deleting message in send_main_menu: {e}")
         await context.bot.send_message(update.effective_chat.id, welcome_message + BOT_FOOTER, reply_markup=reply_markup, parse_mode='Markdown')
-    else:
+    elif update.message:
         await update.message.reply_text(welcome_message + BOT_FOOTER, reply_markup=reply_markup, parse_mode='Markdown')
 
 def create_protocol_menu(callback_prefix, back_target="back_to_main"):
@@ -264,12 +283,15 @@ def create_cancel_menu():
 # --- Command & Fallback Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not is_admin(update):
-        await update.message.reply_text("⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗯𝗼𝘁.")
+        await send_unauthorized_message(update, context)
         return
-    
     await send_main_menu(update, context)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+
     help_text = """╭─────────────────────╮
 │ 𝗕𝗼𝘁 𝗛𝗲𝗹𝗽 >                │
 ╭─────────────────────╯
@@ -297,11 +319,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     if update.callback_query:
         await update.callback_query.edit_message_text(help_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=reply_markup)
-    else:
+    elif update.message:
         await update.message.reply_text(help_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=reply_markup)
 
 async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancels the current operation and returns to the main menu."""
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return ConversationHandler.END
+
     if update.callback_query:
         await update.callback_query.answer("𝗢𝗽𝗲𝗿𝗮𝘁𝗶𝗼𝗻 𝗰𝗮𝗻𝗰𝗲𝗹𝗹𝗲𝗱.")
     
@@ -320,7 +346,7 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def restart_bot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Restart the bot service"""
     if not is_admin(update):
-        await update.message.reply_text("⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗰𝗼𝗺𝗺𝗮𝗻𝗱.")
+        await send_unauthorized_message(update, context)
         return
     
     await update.message.reply_text(f" 𝐁𝐨𝐭 𝐑𝐞𝐬𝐭𝐚𝐫𝐭 𝐒𝐮𝐜𝐜𝐞𝐬𝐟𝐮𝐥 ✅" + BOT_FOOTER, parse_mode='Markdown')
@@ -331,6 +357,10 @@ async def restart_bot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 # --- Account Creation Conversation ---
 async def create_account_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return ConversationHandler.END
+
     text = """╭─────────────────────╮
 │ 𝗖𝗿𝗲𝗮𝘁𝗲 𝗔𝗰𝗰𝗼𝘂𝗻𝘁 >         │
 ╭─────────────────────╯
@@ -361,7 +391,7 @@ async def get_username_create(update: Update, context: ContextTypes.DEFAULT_TYPE
     username = update.message.text
     
     if not re.match("^[a-zA-Z0-9_-]+$", username):
-        error_message = await update.message.reply_text("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝘂𝘀𝗲𝗿𝗻𝗮𝗺𝗲. 𝗨𝘀𝗲 𝗼𝗻𝗹𝘆 𝗹𝗲𝘁𝘁𝗲𝗿𝘀, 𝗻𝘂𝗺𝗯𝗲𝗿𝘀, `_`, `-`. 𝗧𝗿𝘆 𝗮𝗴𝗮𝗶𝗻.", reply_markup=create_cancel_menu())
+        error_message = await update.effective_chat.send_message("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝘂𝘀𝗲𝗿𝗻𝗮𝗺𝗲. 𝗨𝘀𝗲 𝗼𝗻𝗹𝘆 𝗹𝗲𝘁𝘁𝗲𝗿𝘀, 𝗻𝘂𝗺𝗯𝗲𝗿𝘀, `_`, `-`. 𝗧𝗿𝘆 𝗮𝗴𝗮𝗶𝗻.", reply_markup=create_cancel_menu())
         context.user_data['prompt_message_id'] = error_message.message_id
         return GET_USERNAME_CREATE
     
@@ -382,7 +412,7 @@ async def get_username_create(update: Update, context: ContextTypes.DEFAULT_TYPE
 │
 {text_prompt}
 ╰─────────────────────╯"""
-    prompt_message = await update.message.reply_text(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
+    prompt_message = await update.effective_chat.send_message(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
     context.user_data['prompt_message_id'] = prompt_message.message_id
     return next_state
 
@@ -401,7 +431,7 @@ async def get_password_create(update: Update, context: ContextTypes.DEFAULT_TYPE
 │ 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝘁𝗵𝗲 𝗱𝘂𝗿𝗮𝘁𝗶𝗼𝗻
 │ 𝗶𝗻 𝗱𝗮𝘆𝘀 (𝗲.𝗴., 30).
 ╰─────────────────────╯"""
-    prompt_message = await update.message.reply_text(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
+    prompt_message = await update.effective_chat.send_message(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
     context.user_data['prompt_message_id'] = prompt_message.message_id
     return GET_DURATION_CREATE
 
@@ -410,7 +440,7 @@ async def get_duration_create(update: Update, context: ContextTypes.DEFAULT_TYPE
     duration = update.message.text
     
     if not duration.isdigit() or int(duration) <= 0:
-        error_message = await update.message.reply_text("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗱𝘂𝗿𝗮𝘁𝗶𝗼𝗻. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝗮 𝗽𝗼𝘀𝗶𝘁𝗶𝘃𝗲 𝗻𝘂𝗺𝗯𝗲𝗿. 𝗧𝗿𝘆 𝗮𝗴𝗮𝗶𝗻.", reply_markup=create_cancel_menu())
+        error_message = await update.effective_chat.send_message("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗱𝘂𝗿𝗮𝘁𝗶𝗼𝗻. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝗮 𝗽𝗼𝘀𝗶𝘁𝗶𝘃𝗲 𝗻𝘂𝗺𝗯𝗲𝗿. 𝗧𝗿𝘆 𝗮𝗴𝗮𝗶𝗻.", reply_markup=create_cancel_menu())
         context.user_data['prompt_message_id'] = error_message.message_id
         return GET_DURATION_CREATE
     
@@ -436,7 +466,7 @@ async def get_duration_create(update: Update, context: ContextTypes.DEFAULT_TYPE
 │
 {text_prompt}
 ╰─────────────────────╯"""
-    prompt_message = await update.message.reply_text(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
+    prompt_message = await update.effective_chat.send_message(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
     context.user_data['prompt_message_id'] = prompt_message.message_id
     return next_state
 
@@ -445,7 +475,7 @@ async def get_quota_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     quota = update.message.text
     
     if not quota.isdigit() or int(quota) < 0:
-        error_message = await update.message.reply_text("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗾𝘂𝗼𝘁𝗮. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝗮 𝗻𝘂𝗺𝗯𝗲𝗿 (0 𝗼𝗿 𝗺𝗼𝗿𝗲). 𝗧𝗿𝘆 𝗮𝗴𝗮𝗶𝗻.", reply_markup=create_cancel_menu())
+        error_message = await update.effective_chat.send_message("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗾𝘂𝗼𝘁𝗮. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝗮 𝗻𝘂𝗺𝗯𝗲𝗿 (0 𝗼𝗿 𝗺𝗼𝗿𝗲). 𝗧𝗿𝘆 𝗮𝗴𝗮𝗶𝗻.", reply_markup=create_cancel_menu())
         context.user_data['prompt_message_id'] = error_message.message_id
         return GET_QUOTA_CREATE
     
@@ -462,7 +492,7 @@ async def get_quota_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 │ 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝘁𝗵𝗲 𝗜𝗣 𝗹𝗶𝗺𝗶𝘁
 │ (𝗲.𝗴., 1. 𝗨𝘀𝗲 0 𝗳𝗼𝗿 𝘂𝗻𝗹𝗶𝗺𝗶𝘁𝗲𝗱).
 ╰─────────────────────╯"""
-    prompt_message = await update.message.reply_text(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
+    prompt_message = await update.effective_chat.send_message(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
     context.user_data['prompt_message_id'] = prompt_message.message_id
     return GET_IP_LIMIT_CREATE
 
@@ -471,13 +501,13 @@ async def get_ip_limit_and_create(update: Update, context: ContextTypes.DEFAULT_
     ip_limit = update.message.text
     
     if not ip_limit.isdigit() or int(ip_limit) < 0:
-        error_message = await update.message.reply_text("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗜𝗣 𝗹𝗶𝗺𝗶𝘁. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝗮 𝗻𝘂𝗺𝗯𝗲𝗿 (0 𝗼𝗿 𝗺𝗼𝗿𝗲). 𝗧𝗿𝘆 𝗮𝗴𝗮𝗶𝗻.", reply_markup=create_cancel_menu())
+        error_message = await update.effective_chat.send_message("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗜𝗣 𝗹𝗶𝗺𝗶𝘁. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝗮 𝗻𝘂𝗺𝗯𝗲𝗿 (0 𝗼𝗿 𝗺𝗼𝗿𝗲). 𝗧𝗿𝘆 𝗮𝗴𝗮𝗶𝗻.", reply_markup=create_cancel_menu())
         context.user_data['prompt_message_id'] = error_message.message_id
         return GET_IP_LIMIT_CREATE
     
     context.user_data['ip_limit'] = ip_limit
     
-    processing_message = await update.message.reply_text("𝗖𝗿𝗲𝗮𝘁𝗶𝗻𝗴 𝗮𝗰𝗰𝗼𝘂𝗻𝘁, 𝗽𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁...")
+    processing_message = await update.effective_chat.send_message("𝗖𝗿𝗲𝗮𝘁𝗶𝗻𝗴 𝗮𝗰𝗰𝗼𝘂𝗻𝘁, 𝗽𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁...")
     
     ud = context.user_data
     account_type = ud['account_type']
@@ -492,19 +522,23 @@ async def get_ip_limit_and_create(update: Update, context: ContextTypes.DEFAULT_
     
     if error or (data and data.get('status') != 'success'):
         message_text = f"❌ 𝗙𝗮𝗶𝗹𝗲𝗱 𝘁𝗼 𝗰𝗿𝗲𝗮𝘁𝗲 𝗮𝗰𝗰𝗼𝘂𝗻𝘁.\n𝗥𝗲𝗮𝘀𝗼𝗻: {error or data.get('message', 'Unknown error')}"
-        await update.message.reply_text(message_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=create_back_button_menu("back_to_main"))
+        await update.effective_chat.send_message(message_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=create_back_button_menu("back_to_main"))
     else:
         if account_type == 'ssh':
             message_text = format_ssh_output(data)
         else:
             message_text = format_v2ray_output(data, account_type)
-        await update.message.reply_text(message_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=create_back_button_menu("back_to_main"))
+        await update.effective_chat.send_message(message_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=create_back_button_menu("back_to_main"))
     
     context.user_data.clear()
     return ConversationHandler.END
 
 # --- Trial Account ---
 async def trial_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+
     text = """╭─────────────────────╮
 │ 𝗚𝗲𝘁 𝗧𝗿𝗶𝗮𝗹 𝗔𝗰𝗰𝗼𝘂𝗻𝘁 >     │
 ╭─────────────────────╯
@@ -517,6 +551,10 @@ async def trial_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.edit_message_text(text, reply_markup=create_protocol_menu("trial_create", "back_to_main"), parse_mode='Markdown')
 
 async def create_trial_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+        
     query = update.callback_query
     account_type = query.data.split('_')[2]
     
@@ -559,6 +597,10 @@ async def create_trial_account(update: Update, context: ContextTypes.DEFAULT_TYP
 # --- User Management, Server, Admin sections ---
 
 async def manage_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+        
     query = update.callback_query
     text = """╭─────────────────────╮
 │ 𝗨𝘀𝗲𝗿 𝗠𝗮𝗻𝗮𝗴𝗲𝗺𝗲𝗻𝘁 >       │
@@ -575,6 +617,10 @@ async def manage_users_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def list_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+        
     text = """╭─────────────────────╮
 │ 𝗟𝗶𝘀𝘁 𝗨𝘀𝗲𝗿𝘀 >             │
 ╭─────────────────────╯
@@ -584,6 +630,10 @@ async def list_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.edit_message_text(text, reply_markup=create_protocol_menu("list_proto", "manage_users_menu"), parse_mode='Markdown')
 
 async def list_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+        
     query = update.callback_query
     protocol = query.data.split('_')[2]
     await query.edit_message_text(f"𝗙𝗲𝘁𝗰𝗵𝗶𝗻𝗴 𝘂𝘀𝗲𝗿 𝗹𝗶𝘀𝘁 𝗳𝗼𝗿 {protocol.capitalize()}...")
@@ -613,6 +663,10 @@ async def list_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Delete User Conversation ---
 async def delete_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return ConversationHandler.END
+        
     text = """╭─────────────────────╮
 │ 𝗗𝗲𝗹𝗲𝘁𝗲 𝗨𝘀𝗲𝗿 >            │
 ╭─────────────────────╯
@@ -679,6 +733,10 @@ async def delete_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # --- Renew User Conversation ---
 async def renew_user_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return ConversationHandler.END
+        
     text = """╭─────────────────────╮
 │ 𝗥𝗲𝗻𝗲𝘄 𝗨𝘀𝗲𝗿 >             │
 ╭─────────────────────╯
@@ -731,7 +789,7 @@ async def renew_user_get_ip_limit(update: Update, context: ContextTypes.DEFAULT_
     duration = update.message.text
     
     if not duration.isdigit() or int(duration) <= 0:
-        error_message = await update.message.reply_text("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗱𝘂𝗿𝗮𝘁𝗶𝗼𝗻. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝗮 𝗽𝗼𝘀𝗶𝘁𝗶𝘃𝗲 𝗻𝘂𝗺𝗯𝗲𝗿.", reply_markup=create_cancel_menu())
+        error_message = await update.effective_chat.send_message("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗱𝘂𝗿𝗮𝘁𝗶𝗼𝗻. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝗮 𝗽𝗼𝘀𝗶𝘁𝗶𝘃𝗲 𝗻𝘂𝗺𝗯𝗲𝗿.", reply_markup=create_cancel_menu())
         context.user_data['prompt_message_id'] = error_message.message_id
         return GET_NEW_DURATION_RENEW
     
@@ -748,7 +806,7 @@ async def renew_user_get_ip_limit(update: Update, context: ContextTypes.DEFAULT_
 │ 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝘁𝗵𝗲 𝗻𝗲𝘄 𝗜𝗣 𝗹𝗶𝗺𝗶𝘁
 │ (𝗲.𝗴., 2. 𝗨𝘀𝗲 0 𝗳𝗼𝗿 𝘂𝗻𝗹𝗶𝗺𝗶𝘁𝗲𝗱).
 ╰─────────────────────╯"""
-    prompt_message = await update.message.reply_text(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
+    prompt_message = await update.effective_chat.send_message(text, parse_mode='Markdown', reply_markup=create_cancel_menu())
     context.user_data['prompt_message_id'] = prompt_message.message_id
     return GET_NEW_IP_LIMIT_RENEW
 
@@ -757,12 +815,12 @@ async def renew_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ip_limit = update.message.text
     
     if not ip_limit.isdigit() or int(ip_limit) < 0:
-        error_message = await update.message.reply_text("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗜𝗣 𝗹𝗶𝗺𝗶𝘁. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝗮 𝗻𝘂𝗺𝗯𝗲𝗿 (0 𝗼𝗿 𝗺𝗼𝗿𝗲).", reply_markup=create_cancel_menu())
+        error_message = await update.effective_chat.send_message("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗜𝗣 𝗹𝗶𝗺𝗶𝘁. 𝗣𝗹𝗲𝗮𝘀𝗲 𝗲𝗻𝘁𝗲𝗿 𝗮 𝗻𝘂𝗺𝗯𝗲𝗿 (0 𝗼𝗿 𝗺𝗼𝗿𝗲).", reply_markup=create_cancel_menu())
         context.user_data['prompt_message_id'] = error_message.message_id
         return GET_NEW_IP_LIMIT_RENEW
     
     ud = context.user_data
-    processing_message = await update.message.reply_text(f"𝗥𝗲𝗻𝗲𝘄𝗶𝗻𝗴 `{ud['username']}`...")
+    processing_message = await update.effective_chat.send_message(f"𝗥𝗲𝗻𝗲𝘄𝗶𝗻𝗴 `{ud['username']}`...")
 
     data, error = run_script(['/usr/bin/apirenew', ud['protocol'], ud['username'], ud['duration'], ip_limit])
     await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=processing_message.message_id)
@@ -781,13 +839,17 @@ async def renew_user_execute(update: Update, context: ContextTypes.DEFAULT_TYPE)
 ╭─────────────────────╯
 {body}
 ╰─────────────────────╯"""
-    await update.message.reply_text(message_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=create_back_button_menu("manage_users_menu"))
+    await update.effective_chat.send_message(message_text + BOT_FOOTER, parse_mode='Markdown', reply_markup=create_back_button_menu("manage_users_menu"))
     
     context.user_data.clear()
     return ConversationHandler.END
 
 # --- Server Management ---
 async def server_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+
     text = """╭─────────────────────╮
 │ 𝗦𝗲𝗿𝘃𝗲𝗿 𝗠𝗮𝗻𝗮𝗴𝗲𝗺𝗲𝗻𝘁 >      │
 ╭─────────────────────╯
@@ -803,6 +865,10 @@ async def server_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def server_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+        
     query = update.callback_query
     await query.answer("Fetching detailed server stats...")
 
@@ -854,6 +920,10 @@ async def server_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def server_speedtest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+        
     query = update.callback_query
     await query.edit_message_text("𝗥𝘂𝗻𝗻𝗶𝗻𝗴 𝘀𝗽𝗲𝗲𝗱𝘁𝗲𝘀𝘁... 𝗧𝗵𝗶𝘀 𝗺𝗮𝘆 𝘁𝗮𝗸𝗲 𝗮 𝗺𝗶𝗻𝘂𝘁𝗲." + BOT_FOOTER, parse_mode='Markdown')
     try:
@@ -872,6 +942,10 @@ async def server_speedtest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"𝗦𝗽𝗲𝗲𝗱𝘁𝗲𝘀𝘁 𝗳𝗮𝗶𝗹𝗲𝗱: {e}" + BOT_FOOTER, reply_markup=create_back_button_menu("server_menu"))
 
 async def server_reboot_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+        
     text = """╭─────────────────────╮
 │ 𝗖𝗼𝗻𝗳𝗶𝗿𝗺 𝗥𝗲𝗯𝗼𝗼𝘁 >         │
 ╭─────────────────────╯
@@ -882,11 +956,19 @@ async def server_reboot_prompt(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.callback_query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def server_reboot_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+        
     await update.callback_query.edit_message_text("𝗥𝗲𝗯𝗼𝗼𝘁 𝗰𝗼𝗺𝗺𝗮𝗻𝗱 𝗶𝘀𝘀𝘂𝗲𝗱. 𝗕𝗼𝘁 𝘄𝗶𝗹𝗹 𝗯𝗲 𝗼𝗳𝗳𝗹𝗶𝗻𝗲 𝗯𝗿𝗶𝗲𝗳𝗹𝘆." + BOT_FOOTER)
     subprocess.run(['sudo', 'reboot'])
 
-# --- Admin Management ---
+# --- Admin Management (Owner Only) ---
 async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update):
+        await send_unauthorized_message(update, context)
+        return
+
     text = """╭─────────────────────╮
 │ 𝗔𝗱𝗺𝗶𝗻 𝗠𝗮𝗻𝗮𝗴𝗲𝗺𝗲𝗻𝘁 >       │
 ╭─────────────────────╯
@@ -902,6 +984,10 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def admin_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update):
+        await send_unauthorized_message(update, context)
+        return
+
     admins = "\n".join([f"│ • `{admin_id}`" for admin_id in load_admins()])
     text = f"""╭─────────────────────╮
 │ 𝗖𝘂𝗿𝗿𝗲𝗻𝘁 𝗔𝗱𝗺𝗶𝗻𝘀 >         │
@@ -911,6 +997,10 @@ async def admin_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.edit_message_text(text + BOT_FOOTER, parse_mode='Markdown', reply_markup=create_back_button_menu("admin_menu"))
 
 async def admin_add_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not is_owner(update):
+        await send_unauthorized_message(update, context)
+        return ConversationHandler.END
+
     query = update.callback_query
     text = """╭─────────────────────╮
 │ 𝗔𝗱𝗱 𝗔𝗱𝗺𝗶𝗻 >              │
@@ -929,13 +1019,13 @@ async def get_admin_id_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         new_admin_id = int(update.message.text)
         admins = load_admins()
         if new_admin_id in admins:
-            await update.message.reply_text(f"𝗨𝘀𝗲𝗿 `{new_admin_id}` 𝗶𝘀 𝗮𝗹𝗿𝗲𝗮𝗱𝘆 𝗮𝗻 𝗮𝗱𝗺𝗶𝗻.", parse_mode='Markdown', reply_markup=create_back_button_menu("admin_menu"))
+            await update.effective_chat.send_message(f"𝗨𝘀𝗲𝗿 `{new_admin_id}` 𝗶𝘀 𝗮𝗹𝗿𝗲𝗮𝗱𝘆 𝗮𝗻 𝗮𝗱𝗺𝗶𝗻.", parse_mode='Markdown', reply_markup=create_back_button_menu("admin_menu"))
         else:
             admins.add(new_admin_id)
             save_admins(admins)
-            await update.message.reply_text(f"✅ 𝗦𝘂𝗰𝗰𝗲𝘀𝘀! 𝗨𝘀𝗲𝗿 `{new_admin_id}` 𝗶𝘀 𝗻𝗼𝘄 𝗮𝗻 𝗮𝗱𝗺𝗶𝗻.", parse_mode='Markdown', reply_markup=create_back_button_menu("admin_menu"))
+            await update.effective_chat.send_message(f"✅ 𝗦𝘂𝗰𝗰𝗲𝘀𝘀! 𝗨𝘀𝗲𝗿 `{new_admin_id}` 𝗶𝘀 𝗻𝗼𝘄 𝗮𝗻 𝗮𝗱𝗺𝗶𝗻.", parse_mode='Markdown', reply_markup=create_back_button_menu("admin_menu"))
     except ValueError:
-        error_message = await update.message.reply_text("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗜𝗗. 𝗣𝗹𝗲𝗮𝘀𝗲 𝘀𝗲𝗻𝗱 𝗮 𝗻𝘂𝗺𝗲𝗿𝗶𝗰 𝗨𝘀𝗲𝗿 𝗜𝗗.", reply_markup=create_cancel_menu())
+        error_message = await update.effective_chat.send_message("𝗜𝗻𝘃𝗮𝗹𝗶𝗱 𝗜𝗗. 𝗣𝗹𝗲𝗮𝘀𝗲 𝘀𝗲𝗻𝗱 𝗮 𝗻𝘂𝗺𝗲𝗿𝗶𝗰 𝗨𝘀𝗲𝗿 𝗜𝗗.", reply_markup=create_cancel_menu())
         context.user_data['prompt_message_id'] = error_message.message_id
         return GET_ADMIN_ID_ADD
     
@@ -943,6 +1033,10 @@ async def get_admin_id_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     return ConversationHandler.END
 
 async def admin_remove_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not is_owner(update):
+        await send_unauthorized_message(update, context)
+        return ConversationHandler.END
+
     admins = [admin for admin in load_admins() if admin != OWNER_ID]
     if not admins:
         await update.callback_query.edit_message_text("𝗡𝗼 𝗼𝘁𝗵𝗲𝗿 𝗮𝗱𝗺𝗶𝗻𝘀 𝘁𝗼 𝗿𝗲𝗺𝗼𝘃𝗲."+ BOT_FOOTER, reply_markup=create_back_button_menu("admin_menu"))
@@ -958,6 +1052,10 @@ async def admin_remove_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return SELECT_ADMIN_TO_REMOVE
 
 async def select_admin_to_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not is_owner(update):
+        await send_unauthorized_message(update, context)
+        return ConversationHandler.END
+
     query = update.callback_query
     admin_id = int(query.data.split('_')[2])
     admins = load_admins()
@@ -968,10 +1066,17 @@ async def select_admin_to_remove(update: Update, context: ContextTypes.DEFAULT_T
 
 # --- General Button Router ---
 async def button_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Universal auth check for all button presses
+    if not is_admin(update):
+        await send_unauthorized_message(update, context)
+        return
+
     query = update.callback_query
     await query.answer()
     route = query.data
     
+    # Route to the appropriate function
+    # The functions themselves will handle further permission checks (e.g., owner-only)
     if route == "back_to_main": 
         await send_main_menu(update, context)
     elif route == "help": 
@@ -985,7 +1090,7 @@ async def button_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif route == "server_menu": 
         await server_menu(update, context)
     elif route == "admin_menu": 
-        await admin_menu(update, context)
+        await admin_menu(update, context) # This function has an owner check
     elif route == "list_user_start": 
         await list_user_start(update, context)
     elif route.startswith("list_proto_"): 
@@ -999,7 +1104,8 @@ async def button_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif route == "server_reboot_confirm": 
         await server_reboot_confirm(update, context)
     elif route == "admin_list": 
-        await admin_list(update, context)
+        await admin_list(update, context) # This function has an owner check
+
 
 # --- Startup Notification ---
 async def send_startup_notification(application: Application):
