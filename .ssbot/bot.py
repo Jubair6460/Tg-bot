@@ -828,10 +828,10 @@ async def server_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats_text = f"""
 ╭─**Server & System Info**
 │ 𝗦𝘆𝘀𝘁𝗲𝗺: `{os_info}`
-│ 𝗗𝗼𝗺𝗮𝗶𝗻: `{domain}`
-│ 𝗜𝗣: `{ip_address}`
 │ 𝗖𝗶𝘁𝘆: `{city}`
 │ 𝗜𝗦𝗣: `{isp}`
+│ 𝗜𝗣: `{ip_address}`
+│ 𝗗𝗼𝗺𝗮𝗶𝗻: `{domain}`
 │ 𝗡𝗦: `{ns_host}`
 ╰─────────────────────╯
 ╭─**Performance**
