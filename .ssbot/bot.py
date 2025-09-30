@@ -98,7 +98,7 @@ def is_owner(update: Update) -> bool:
 
 async def send_unauthorized_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends a standard 'not authorized' message and cleans up."""
-    text = "⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗯𝗼𝘁." + BOT_FOOTER
+    text = "⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗯𝗼𝘁."
     if update.callback_query:
         # Answer the query to remove the "loading" state, and show an alert.
         await update.callback_query.answer(text, show_alert=True)
