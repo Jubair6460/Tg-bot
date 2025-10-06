@@ -162,6 +162,7 @@ def format_v2ray_output(data, account_type):
 def format_ssh_output(data):
     d = data.get('data', {})
     save_link = f"https://{d.get('domain', 'your.domain.com')}:81/ssh-{d.get('username', 'user')}.txt"
+    ovpn_link = f"https://{d.get('domain', 'your.domain.com')}:81/allovpn.zip"
     return f"""
 ━━━━━━━━━━━━━━━━━━━━
     𝗦𝗦𝗛 / 𝗢𝗩𝗣𝗡 𝗔𝗰𝗰𝗼𝘂𝗻𝘁 𝗖𝗿𝗲𝗮𝘁𝗲𝗱
@@ -172,7 +173,6 @@ def format_ssh_output(data):
 𝗡𝗦 𝗛𝗼𝘀𝘁   : `{d.get('ns_domain', 'N-A')}`
 𝗟𝗼𝗰𝗮𝘁𝗶𝗼𝗻   : `{d.get('city', 'N/A')}`
 𝗣𝘂𝗯𝗹𝗶𝗰 𝗸𝗲𝘆  : `{d.get('pubkey', 'N/A')}`
-𝗘𝘅𝗽𝗶𝗿𝗲𝘀    : `{d.get('expired', 'N/A')}`
 ━━━━━━━━━━━━━━━━━━━━
 ━━━━━ 𝗣𝗼𝗿𝘁𝘀 ━━━━━
 𝗢𝗽𝗲𝗻𝗦𝗦𝗛   : `443`, `80`, `22`
@@ -199,6 +199,8 @@ def format_ssh_output(data):
 `{d.get('domain', 'N/A')}:1-65535@{d.get('username', 'N/A')}:{d.get('password', 'N/A')}`
 ━━━━━━━━━━━━━━━━━━━━
 𝗦𝗮𝘃𝗲 𝗟𝗶𝗻𝗸  : {save_link}
+━━━━━━━━━━━━━━━━━━━━
+𝗘𝘅𝗽𝗶𝗿𝗲𝘀    : `{d.get('expired', 'N/A')}`
 ━━━━━━━━━━━━━━━━━━━━
 """
 
