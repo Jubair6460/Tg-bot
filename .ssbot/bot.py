@@ -127,6 +127,7 @@ def run_script(command):
 def format_v2ray_output(data, account_type):
     d = data.get('data', {})
     save_link = f"https://{d.get('domain', 'your.domain.com')}:81/{account_type.lower()}-{d.get('username', 'user')}.txt"
+    
     message = f"""
 ━━━━━━━━━━━━━━━━━━━━
     𝗫𝗿𝗮𝘆/{account_type.capitalize()} 𝗔𝗰𝗰𝗼𝘂𝗻𝘁
@@ -152,8 +153,10 @@ def format_v2ray_output(data, account_type):
         message += f"𝗡𝗧𝗟𝗦 𝗟𝗶𝗻𝗸   : `{d.get(f'{account_type.lower()}_nontls_link', 'N/A')}`\n━━━━━━━━━━━━━━━━━━━━\n"
     if d.get(f'{account_type.lower()}_grpc_link'):
         message += f"𝗚𝗥𝗣𝗖 𝗟𝗶𝗻𝗸   : `{d.get(f'{account_type.lower()}_grpc_link', 'N/A')}`\n━━━━━━━━━━━━━━━━━━━━\n"
+    
+    # এখানে লিঙ্কটি Click Here করা হয়েছে
     message += f"""
-𝗦𝗮𝘃𝗲 𝗟𝗶𝗻𝗸   : {save_link}
+𝗦𝗮𝘃𝗲 𝗟𝗶𝗻𝗸   : [Click Here]({save_link})
 ━━━━━━━━━━━━━━━━━━━━
 𝗘𝘅𝗽𝗶𝗿𝗲𝘀 𝗢𝗻  : `{d.get('expired', 'N/A')}`
 """
@@ -163,6 +166,7 @@ def format_ssh_output(data):
     d = data.get('data', {})
     save_link = f"https://{d.get('domain', 'your.domain.com')}:81/ssh-{d.get('username', 'user')}.txt"
     ovpn_link = f"https://{d.get('domain', 'your.domain.com')}:81/allovpn.zip"
+    
     return f"""
 ━━━━━━━━━━━━━━━━━━━━
     𝗦𝗦𝗛 / 𝗢𝗩𝗣𝗡 𝗔𝗰𝗰𝗼𝘂𝗻𝘁 𝗖𝗿𝗲𝗮𝘁𝗲𝗱
@@ -198,12 +202,13 @@ def format_ssh_output(data):
 𝗨𝗣𝗗 𝗖𝘂𝘀𝘁𝗼𝗺 𝗖𝗼𝗻𝗳𝗶𝗴 : 
 `{d.get('domain', 'N/A')}:1-65535@{d.get('username', 'N/A')}:{d.get('password', 'N/A')}`
 ━━━━━━━━━━━━━━━━━━━━
-𝗦𝗮𝘃𝗲 𝗟𝗶𝗻𝗸  : {save_link}
-𝗢𝗽𝗲𝗻𝗩𝗣𝗡   : {ovpn_link}
+𝗦𝗮𝘃𝗲 𝗟𝗶𝗻𝗸  : [Click Here]({save_link})
+𝗢𝗽𝗲𝗻𝗩𝗣𝗡   : [Click Here]({ovpn_link})
 ━━━━━━━━━━━━━━━━━━━━
 𝗘𝘅𝗽𝗶𝗿𝗲𝘀    : `{d.get('expired', 'N/A')}`
 ━━━━━━━━━━━━━━━━━━━━
 """
+
 
 async def get_users_for_protocol(protocol):
     data, error = run_script(['/usr/bin/apidelete', protocol])
